@@ -1,0 +1,1160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GST Purchase Reconciliation</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --ink: #0f0e0c;
+    --paper: #f5f2ec;
+    --cream: #ede9df;
+    --rule: #d4cfc4;
+    --accent: #c8441a;
+    --accent2: #2a6b4a;
+    --accent3: #1a4e8c;
+    --warn: #c8891a;
+    --muted: #8a8278;
+    --card: #ffffff;
+    --shadow: rgba(15,14,12,0.08);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 16px; scroll-behavior: smooth; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Lora', Georgia, serif;
+    min-height: 100vh;
+    background-image:
+      repeating-linear-gradient(0deg, transparent, transparent 27px, var(--rule) 27px, var(--rule) 28px);
+  }
+
+  /* ── HEADER ── */
+  header {
+    background: var(--ink);
+    color: var(--paper);
+    padding: 0 2rem;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 64px;
+    position: sticky; top: 0; z-index: 100;
+    border-bottom: 3px solid var(--accent);
+  }
+  .brand {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800; font-size: 1.4rem;
+    letter-spacing: -0.02em;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .brand-dot { width: 10px; height: 10px; background: var(--accent); border-radius: 50%; }
+  .brand-sub {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem; font-weight: 300;
+    letter-spacing: 0.12em; color: var(--muted);
+    text-transform: uppercase;
+  }
+  .header-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem; letter-spacing: 0.1em;
+    padding: 4px 10px;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 3px; color: var(--muted);
+  }
+
+  /* ── MAIN LAYOUT ── */
+  main { max-width: 1280px; margin: 0 auto; padding: 2.5rem 2rem 4rem; }
+
+  /* ── UPLOAD SECTION ── */
+  .upload-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  .upload-card {
+    background: var(--card);
+    border: 2px dashed var(--rule);
+    border-radius: 6px;
+    padding: 2rem;
+    transition: border-color 0.2s, background 0.2s;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+  }
+  .upload-card:hover, .upload-card.drag-over {
+    border-color: var(--accent);
+    background: #fff8f5;
+  }
+  .upload-card.loaded { border-style: solid; border-color: var(--accent2); background: #f5fbf7; }
+  .upload-icon {
+    font-size: 2.5rem; margin-bottom: 0.75rem;
+    display: block;
+  }
+  .upload-label {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700; font-size: 0.95rem;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    margin-bottom: 0.4rem;
+  }
+  .upload-hint {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem; color: var(--muted);
+    letter-spacing: 0.04em;
+  }
+  .upload-status {
+    margin-top: 0.75rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem; font-weight: 500;
+    color: var(--accent2);
+    display: none;
+  }
+  .upload-card.loaded .upload-status { display: block; }
+  .file-input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+  /* Column mapper */
+  .col-mapper {
+    background: var(--cream);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 1rem 1.25rem;
+    margin-top: 0.75rem;
+    display: none;
+  }
+  .upload-card.loaded .col-mapper { display: block; }
+  .col-mapper h4 {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--muted); margin-bottom: 0.6rem;
+  }
+  .mapper-row {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 4px;
+  }
+  .mapper-row label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem; min-width: 100px; color: var(--ink);
+  }
+  .mapper-row select {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 2px 6px;
+    background: white; color: var(--ink);
+    flex: 1;
+  }
+
+  /* ── CONTROLS ── */
+  .controls {
+    display: flex; align-items: center; gap: 1rem;
+    margin-bottom: 2rem; flex-wrap: wrap;
+  }
+  .btn {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700; font-size: 0.85rem;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    padding: 0.7rem 1.6rem;
+    border: none; border-radius: 4px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .btn-primary {
+    background: var(--accent); color: white;
+  }
+  .btn-primary:hover { background: #a8381a; transform: translateY(-1px); }
+  .btn-primary:disabled { background: var(--rule); color: var(--muted); cursor: not-allowed; transform: none; }
+  .btn-outline {
+    background: transparent;
+    border: 1.5px solid var(--ink);
+    color: var(--ink);
+  }
+  .btn-outline:hover { background: var(--ink); color: white; }
+  .tolerance-wrap {
+    display: flex; align-items: center; gap: 8px;
+    font-family: 'DM Mono', monospace; font-size: 0.78rem;
+    color: var(--muted);
+  }
+  .tolerance-wrap input {
+    width: 80px;
+    font-family: 'DM Mono', monospace; font-size: 0.78rem;
+    border: 1px solid var(--rule); border-radius: 3px;
+    padding: 4px 8px; background: white;
+  }
+
+  /* ── SUMMARY TILES ── */
+  .summary-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1rem; margin-bottom: 2rem;
+  }
+  .tile {
+    background: var(--card);
+    border-radius: 5px;
+    padding: 1rem 1.25rem;
+    border-top: 3px solid var(--rule);
+    box-shadow: 0 2px 8px var(--shadow);
+  }
+  .tile.matched { border-color: var(--accent2); }
+  .tile.books-only { border-color: var(--accent3); }
+  .tile.portal-only { border-color: var(--warn); }
+  .tile.mismatch { border-color: var(--accent); }
+  .tile.minor { border-color: var(--muted); }
+  .tile-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--muted);
+    margin-bottom: 0.4rem;
+  }
+  .tile-value {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800; font-size: 1.6rem;
+    line-height: 1;
+  }
+  .tile-sub {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem; color: var(--muted); margin-top: 4px;
+  }
+
+  /* ── ITC SUMMARY PANEL ── */
+  .itc-section {
+    margin-bottom: 2rem;
+  }
+  .itc-section-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700; font-size: 0.78rem;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 0.75rem;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .itc-section-title::after {
+    content: ''; flex: 1; height: 1px; background: var(--rule);
+  }
+  .itc-panel {
+    background: var(--card);
+    border-radius: 6px;
+    border: 1px solid var(--rule);
+    box-shadow: 0 2px 10px var(--shadow);
+    overflow: hidden;
+  }
+  .itc-table {
+    width: 100%; border-collapse: collapse; table-layout: fixed;
+  }
+  .itc-table thead tr {
+    background: var(--ink); color: var(--paper);
+  }
+  .itc-table th {
+    font-family: 'Syne', sans-serif;
+    font-weight: 600; font-size: 0.66rem;
+    letter-spacing: 0.05em; text-transform: uppercase;
+    padding: 9px 12px; text-align: right;
+    white-space: nowrap; cursor: default;
+    line-height: 1; vertical-align: middle;
+  }
+  .itc-table th.col-label { text-align: left; }
+  .itc-table td {
+    font-family: 'DM Mono', monospace; font-size: 0.76rem;
+    padding: 8px 12px; text-align: right;
+    border-bottom: 1px solid var(--cream);
+  }
+  .itc-table td.col-label {
+    text-align: left;
+    font-family: 'Syne', sans-serif;
+    font-weight: 600; font-size: 0.78rem;
+    color: var(--ink);
+  }
+  .itc-table tr:last-child td { border-bottom: none; }
+  .itc-table .total-row td {
+    background: #f7f4ef;
+    font-weight: 700;
+    border-top: 2px solid var(--rule);
+  }
+  .itc-table .total-row td:first-child {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.82rem; text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .itc-col-books { color: var(--accent3); }
+  .itc-col-portal { color: var(--accent2); }
+  .itc-col-diff-pos { color: var(--accent); font-weight: 600; }
+  .itc-col-diff-neg { color: var(--accent2); font-weight: 600; }
+  .itc-col-diff-zero { color: var(--muted); }
+
+  /* sub-header row */
+  .itc-table .sub-head td {
+    background: var(--cream);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.62rem; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--muted);
+    padding: 4px 16px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .itc-table .sub-head td:first-child { text-align: left; }
+
+  /* tax type dot */
+  .tax-dot {
+    display: inline-block; width: 8px; height: 8px;
+    border-radius: 50%; margin-right: 6px; vertical-align: middle;
+  }
+  .dot-igst { background: #1a4e8c; }
+  .dot-cgst { background: #2a6b4a; }
+  .dot-sgst { background: #c8891a; }
+  .dot-cess { background: #8a8278; }
+  .dot-total { background: #c8441a; }
+
+  /* ── FILTERS ── */
+  .filter-bar {
+    display: flex; align-items: center; gap: 0.75rem;
+    margin-bottom: 1rem; flex-wrap: wrap;
+  }
+  .filter-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem; letter-spacing: 0.05em;
+    padding: 5px 12px;
+    border: 1px solid var(--rule);
+    border-radius: 20px;
+    background: var(--card);
+    cursor: pointer; transition: all 0.15s;
+    color: var(--ink);
+  }
+  .filter-btn.active, .filter-btn:hover { background: var(--ink); color: white; border-color: var(--ink); }
+  .search-input {
+    font-family: 'DM Mono', monospace; font-size: 0.78rem;
+    border: 1px solid var(--rule); border-radius: 4px;
+    padding: 5px 12px; background: white;
+    margin-left: auto; width: 220px;
+  }
+
+  /* ── TABLE ── */
+  .table-wrap {
+    background: var(--card);
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 2px 12px var(--shadow);
+    border: 1px solid var(--rule);
+  }
+  table {
+    width: 100%; border-collapse: collapse;
+    font-size: 0.82rem;
+  }
+  #recoTable {
+    table-layout: fixed; min-width: 1100px;
+  }
+  thead {
+    background: var(--ink); color: var(--paper);
+    position: sticky; top: 64px; z-index: 10;
+  }
+  th {
+    font-family: 'Syne', sans-serif;
+    font-weight: 600; font-size: 0.66rem;
+    letter-spacing: 0.05em; text-transform: uppercase;
+    padding: 9px 10px; text-align: left;
+    white-space: nowrap;
+    line-height: 1; vertical-align: middle;
+    cursor: pointer; user-select: none;
+  }
+  th:hover { background: #2a2925; }
+  th.sort-asc::after  { content: ' ▲'; font-size: 0.55rem; }
+  th.sort-desc::after { content: ' ▼'; font-size: 0.55rem; }
+  th.th-right { text-align: right; }
+  td {
+    font-family: 'DM Mono', monospace; font-size: 0.75rem;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--cream);
+    vertical-align: top;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  tr:hover td { background: #fdf9f5; }
+  .num { text-align: right; }
+
+  /* status badges */
+  .badge {
+    display: inline-block;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.63rem; font-weight: 500;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 2px 8px; border-radius: 3px;
+    white-space: nowrap;
+  }
+  .badge-matched { background: #e8f5ee; color: var(--accent2); }
+  .badge-books { background: #e8eef8; color: var(--accent3); }
+  .badge-portal { background: #fff4e5; color: var(--warn); }
+  .badge-mismatch { background: #fdeee8; color: var(--accent); }
+  .badge-minor { background: #f0eee9; color: var(--muted); }
+
+  .diff-cell { color: var(--accent); font-weight: 500; }
+  .diff-cell.zero { color: var(--accent2); }
+
+  /* ── EMPTY STATE ── */
+  .empty-state {
+    text-align: center; padding: 5rem 2rem;
+    color: var(--muted);
+  }
+  .empty-state .big { font-size: 3rem; margin-bottom: 1rem; }
+  .empty-state p { font-family: 'Lora', serif; font-size: 1rem; }
+
+  /* ── EXPORT BAR ── */
+  .export-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.75rem 1rem;
+    background: var(--cream);
+    border-bottom: 1px solid var(--rule);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem; color: var(--muted);
+  }
+
+  /* ── PAGINATION ── */
+  .pagination {
+    display: flex; align-items: center; justify-content: center;
+    gap: 0.5rem; padding: 1rem;
+    font-family: 'DM Mono', monospace; font-size: 0.78rem;
+  }
+  .page-btn {
+    padding: 4px 10px; border: 1px solid var(--rule);
+    border-radius: 3px; background: white; cursor: pointer;
+    color: var(--ink);
+  }
+  .page-btn.active { background: var(--ink); color: white; border-color: var(--ink); }
+  .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── PROGRESS ── */
+  .progress-overlay {
+    display: none;
+    position: fixed; inset: 0; z-index: 999;
+    background: rgba(15,14,12,0.55);
+    align-items: center; justify-content: center;
+  }
+  .progress-overlay.show { display: flex; }
+  .progress-box {
+    background: white; border-radius: 8px; padding: 2rem 3rem;
+    text-align: center; min-width: 300px;
+  }
+  .progress-box h3 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700; margin-bottom: 0.75rem;
+  }
+  .progress-bar-wrap {
+    height: 6px; background: var(--cream); border-radius: 3px; overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%; background: var(--accent);
+    border-radius: 3px; width: 0%;
+    transition: width 0.3s;
+  }
+
+  /* scroll */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: var(--cream); }
+  ::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 4px; }
+
+  @media (max-width: 768px) {
+    .upload-grid { grid-template-columns: 1fr; }
+    .summary-row { grid-template-columns: repeat(2, 1fr); }
+    th, td { font-size: 0.68rem; padding: 6px 8px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="brand"><div class="brand-dot"></div> GST Purchase Reconciliation</div>
+    <div class="brand-sub">Books vs GSTR-2B · Purchase Register</div>
+  </div>
+  <div class="header-badge">v2.0 · 2025-26</div>
+</header>
+
+<div class="progress-overlay" id="progressOverlay">
+  <div class="progress-box">
+    <h3 id="progressTitle">Processing…</h3>
+    <p id="progressMsg" style="font-family:'DM Mono',monospace;font-size:.78rem;color:var(--muted);margin-bottom:1rem;"></p>
+    <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progressFill"></div></div>
+  </div>
+</div>
+
+<main>
+
+  <!-- UPLOAD -->
+  <div class="upload-grid">
+    <!-- Books -->
+    <div class="upload-card" id="booksCard" ondragover="dragOver(event,'booksCard')" ondragleave="dragLeave('booksCard')" ondrop="dropFile(event,'books')">
+      <input type="file" class="file-input" id="booksFile" accept=".xlsx,.xlsm,.csv" onchange="handleFile(event,'books')">
+      <span class="upload-icon">📒</span>
+      <div class="upload-label">Books of Accounts</div>
+      <div class="upload-hint">As per Our Records — .xlsx / .xlsm / .csv</div>
+      <div class="upload-status" id="booksStatus">✓ Loaded</div>
+      <div class="col-mapper" id="booksMapper">
+        <h4>Map Columns</h4>
+        <div id="booksMapperRows"></div>
+      </div>
+    </div>
+
+    <!-- Portal -->
+    <div class="upload-card" id="portalCard" ondragover="dragOver(event,'portalCard')" ondragleave="dragLeave('portalCard')" ondrop="dropFile(event,'portal')">
+      <input type="file" class="file-input" id="portalFile" accept=".xlsx,.xlsm,.csv" onchange="handleFile(event,'portal')">
+      <span class="upload-icon">🏛️</span>
+      <div class="upload-label">GSTR-2B / 2A Portal Data</div>
+      <div class="upload-hint">Downloaded from GST Portal — .xlsx / .xlsm / .csv</div>
+      <div class="upload-status" id="portalStatus">✓ Loaded</div>
+      <div class="col-mapper" id="portalMapper">
+        <h4>Map Columns</h4>
+        <div id="portalMapperRows"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTROLS -->
+  <div class="controls">
+    <button class="btn btn-primary" id="recoBtn" onclick="runReconciliation()" disabled>⚖ Run Reconciliation</button>
+    <button class="btn btn-outline" id="exportBtn" onclick="exportCSV()" style="display:none">⬇ Export CSV</button>
+    <div class="tolerance-wrap">
+      <label>Tolerance ₹</label>
+      <input type="number" id="tolerance" value="100" min="0" step="10">
+      <span style="font-size:0.65rem">(minor diff threshold)</span>
+    </div>
+  </div>
+
+  <!-- SUMMARY TILES -->
+  <div class="summary-row" id="summaryRow" style="display:none">
+    <div class="tile matched">
+      <div class="tile-label">Fully Matched</div>
+      <div class="tile-value" id="tileMatched">0</div>
+      <div class="tile-sub" id="tileMatchedAmt">₹0</div>
+    </div>
+    <div class="tile mismatch">
+      <div class="tile-label">Amount Mismatch</div>
+      <div class="tile-value" id="tileMismatch">0</div>
+      <div class="tile-sub" id="tileMismatchAmt">Diff ₹0</div>
+    </div>
+    <div class="tile books-only">
+      <div class="tile-label">In Books Only</div>
+      <div class="tile-value" id="tileBooksOnly">0</div>
+      <div class="tile-sub" id="tileBooksOnlyAmt">₹0</div>
+    </div>
+    <div class="tile portal-only">
+      <div class="tile-label">In Portal Only</div>
+      <div class="tile-value" id="tilePortalOnly">0</div>
+      <div class="tile-sub" id="tilePortalOnlyAmt">₹0</div>
+    </div>
+    <div class="tile minor">
+      <div class="tile-label">Minor Diff</div>
+      <div class="tile-value" id="tileMinor">0</div>
+      <div class="tile-sub" id="tileMinorAmt">Diff ₹0</div>
+    </div>
+  </div>
+
+  <!-- ITC SUMMARY -->
+  <div class="itc-section" id="itcSection" style="display:none">
+    <div class="itc-section-title">ITC Summary — Books vs GSTR-2B</div>
+    <div class="itc-panel">
+      <table class="itc-table">
+        <colgroup>
+          <col style="width:18%">
+          <col style="width:14%">
+          <col style="width:14%">
+          <col style="width:13%">
+          <col style="width:14%">
+          <col style="width:14%">
+          <col style="width:13%">
+        </colgroup>
+        <thead>
+          <tr>
+            <th class="col-label">Tax Head</th>
+            <th>As per Books ₹</th>
+            <th>As per 2B ₹</th>
+            <th>Difference ₹</th>
+            <th>Matched ₹</th>
+            <th>Books Only ₹</th>
+            <th>Portal Only ₹</th>
+          </tr>
+        </thead>
+        <tbody id="itcTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- RESULTS TABLE -->
+  <div id="resultsSection" style="display:none">
+    <div class="filter-bar">
+      <button class="filter-btn active" onclick="setFilter('all', this)">All</button>
+      <button class="filter-btn" onclick="setFilter('matched', this)">✅ Matched</button>
+      <button class="filter-btn" onclick="setFilter('mismatch', this)">⚠ Mismatch</button>
+      <button class="filter-btn" onclick="setFilter('books_only', this)">📒 Books Only</button>
+      <button class="filter-btn" onclick="setFilter('portal_only', this)">🏛 Portal Only</button>
+      <button class="filter-btn" onclick="setFilter('minor', this)">≈ Minor</button>
+      <input type="text" class="search-input" id="searchInput" placeholder="Search GSTIN / Invoice / Supplier…" oninput="applyFilters()">
+    </div>
+
+    <div class="table-wrap">
+      <div class="export-bar">
+        <span id="rowCount">0 records</span>
+        <span>Click column headers to sort</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table id="recoTable">
+          <colgroup>
+            <col style="width:110px">  <!-- Status -->
+            <col style="width:155px">  <!-- GSTIN -->
+            <col style="width:180px">  <!-- Supplier -->
+            <col style="width:120px">  <!-- Invoice No -->
+            <col style="width:90px">   <!-- Date -->
+            <col style="width:120px">  <!-- Taxable Books -->
+            <col style="width:120px">  <!-- Taxable Portal -->
+            <col style="width:120px">  <!-- Tax Books -->
+            <col style="width:120px">  <!-- Tax Portal -->
+            <col style="width:100px">  <!-- Diff -->
+            <col>                      <!-- Reason -->
+          </colgroup>
+          <thead>
+            <tr>
+              <th onclick="sortTable('status')">Status</th>
+              <th onclick="sortTable('gstin')">GSTIN Supplier</th>
+              <th onclick="sortTable('supplier')">Supplier Name</th>
+              <th onclick="sortTable('invoice_no')">Invoice No.</th>
+              <th onclick="sortTable('invoice_date')">Date</th>
+              <th class="th-right" onclick="sortTable('taxable_books')">Taxable Books ₹</th>
+              <th class="th-right" onclick="sortTable('taxable_portal')">Taxable Portal ₹</th>
+              <th class="th-right" onclick="sortTable('tax_books')">Total Tax Books ₹</th>
+              <th class="th-right" onclick="sortTable('tax_portal')">Total Tax Portal ₹</th>
+              <th class="th-right" onclick="sortTable('diff')">Tax Diff ₹</th>
+              <th onclick="sortTable('reason')">Reason / Remark</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+      <div class="pagination" id="pagination"></div>
+    </div>
+  </div>
+
+  <!-- EMPTY STATE -->
+  <div class="empty-state" id="emptyState">
+    <div class="big">⚖</div>
+    <p>Upload your <strong>Books</strong> and <strong>Portal 2B</strong> files above,<br>then click <em>Run Reconciliation</em> to see the mismatch report.</p>
+  </div>
+
+</main>
+
+<script>
+// ── STATE ──────────────────────────────────────────────────────────
+let booksData = null, portalData = null;
+let booksColumns = [], portalColumns = [];
+let reconResults = [];
+let filteredResults = [];
+let currentFilter = 'all';
+let sortCol = null, sortDir = 1;
+let currentPage = 1;
+const PAGE_SIZE = 50;
+
+// Column mapping state
+let booksMap = { gstin:'', supplier:'', invoice_no:'', invoice_date:'', taxable:'', igst:'', cgst:'', sgst:'', cess:'' };
+let portalMap = { gstin:'', supplier:'', invoice_no:'', invoice_date:'', taxable:'', igst:'', cgst:'', sgst:'', cess:'' };
+
+const FIELD_LABELS = {
+  gstin: 'GSTIN of Supplier',
+  supplier: 'Supplier Name',
+  invoice_no: 'Invoice Number',
+  invoice_date: 'Invoice Date',
+  taxable: 'Taxable Value',
+  igst: 'IGST',
+  cgst: 'CGST',
+  sgst: 'SGST/UT Tax',
+  cess: 'Cess'
+};
+
+// ── FILE HANDLING ───────────────────────────────────────────────────
+function dragOver(e, cardId) { e.preventDefault(); document.getElementById(cardId).classList.add('drag-over'); }
+function dragLeave(cardId) { document.getElementById(cardId).classList.remove('drag-over'); }
+function dropFile(e, type) {
+  e.preventDefault();
+  const card = type === 'books' ? 'booksCard' : 'portalCard';
+  document.getElementById(card).classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) processFile(file, type);
+}
+
+function handleFile(e, type) {
+  const file = e.target.files[0];
+  if (file) processFile(file, type);
+}
+
+function processFile(file, type) {
+  showProgress('Reading file…', file.name, 20);
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type: 'array', cellDates: true });
+
+      // Find the right sheet
+      let sheetName = wb.SheetNames[0];
+      if (type === 'books') {
+        const match = wb.SheetNames.find(s => /our records|books|purchase/i.test(s));
+        if (match) sheetName = match;
+      } else {
+        const match = wb.SheetNames.find(s => /portal|2b|2a|gstr/i.test(s));
+        if (match) sheetName = match;
+      }
+
+      const ws = wb.Sheets[sheetName];
+      // Read raw with header detection
+      let rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, dateNF: 'DD-MM-YYYY' });
+
+      // Find header row (first row with multiple non-empty cells)
+      let headerIdx = 0;
+      for (let i = 0; i < Math.min(10, rows.length); i++) {
+        const filled = rows[i].filter(c => c && c.toString().trim()).length;
+        if (filled >= 4) { headerIdx = i; break; }
+      }
+      const headers = rows[headerIdx].map((h, i) => ({ label: (h || `Col ${i+1}`).toString().trim(), index: i }));
+      const dataRows = rows.slice(headerIdx + 1).filter(r => r.some(c => c && c.toString().trim()));
+
+      setProgress(60);
+
+      if (type === 'books') {
+        booksColumns = headers;
+        booksData = dataRows;
+        booksMap = autoMapColumns(headers, 'books');
+        renderMapper('booksMapperRows', headers, booksMap, 'books');
+        document.getElementById('booksCard').classList.add('loaded');
+        document.getElementById('booksStatus').textContent = `✓ ${dataRows.length} records from sheet "${sheetName}"`;
+      } else {
+        portalColumns = headers;
+        portalData = dataRows;
+        portalMap = autoMapColumns(headers, 'portal');
+        renderMapper('portalMapperRows', headers, portalMap, 'portal');
+        document.getElementById('portalCard').classList.add('loaded');
+        document.getElementById('portalStatus').textContent = `✓ ${dataRows.length} records from sheet "${sheetName}"`;
+      }
+      hideProgress();
+      checkReady();
+    } catch(err) {
+      hideProgress();
+      alert('Error reading file: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function autoMapColumns(headers, type) {
+  const map = {};
+  const patterns = {
+    gstin: /gstin|gst.?in|gstin.?supplier/i,
+    supplier: /name|supplier|trade|legal/i,
+    invoice_no: /invoice.?no|inv.?no|bill.?no|voucher/i,
+    invoice_date: /invoice.?date|inv.?date|bill.?date|date/i,
+    taxable: /taxable.?value|taxable/i,
+    igst: /integrated|igst/i,
+    cgst: /central|cgst/i,
+    sgst: /state|sgst|ut.?tax/i,
+    cess: /cess/i
+  };
+  Object.keys(patterns).forEach(field => {
+    const h = headers.find(h => patterns[field].test(h.label));
+    map[field] = h ? h.index.toString() : '';
+  });
+  return map;
+}
+
+function renderMapper(containerId, headers, mapObj, type) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = Object.entries(FIELD_LABELS).map(([field, label]) => `
+    <div class="mapper-row">
+      <label>${label}</label>
+      <select onchange="updateMap('${type}','${field}',this.value)">
+        <option value="">-- select --</option>
+        ${headers.map(h => `<option value="${h.index}" ${mapObj[field] == h.index ? 'selected' : ''}>${h.label}</option>`).join('')}
+      </select>
+    </div>
+  `).join('');
+}
+
+function updateMap(type, field, value) {
+  if (type === 'books') booksMap[field] = value;
+  else portalMap[field] = value;
+}
+
+function checkReady() {
+  document.getElementById('recoBtn').disabled = !(booksData && portalData);
+}
+
+// ── RECONCILIATION ENGINE ───────────────────────────────────────────
+function getVal(row, idx) {
+  if (idx === '' || idx === undefined) return '';
+  const v = row[parseInt(idx)];
+  return v === null || v === undefined ? '' : v.toString().trim();
+}
+
+function getNum(row, idx) {
+  const v = getVal(row, idx);
+  const n = parseFloat(v.replace(/[,₹\s]/g,''));
+  return isNaN(n) ? 0 : n;
+}
+
+function normalizeKey(gstin, invoice) {
+  return (gstin + '||' + invoice).toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9|]/g, '');
+}
+
+function formatINR(n) {
+  if (n === null || n === undefined) return '—';
+  return n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function runReconciliation() {
+  const tolerance = parseFloat(document.getElementById('tolerance').value) || 100;
+  showProgress('Reconciling records…', 'Matching invoices by GSTIN + Invoice No…', 10);
+
+  setTimeout(() => {
+    // Build portal lookup
+    const portalMap2 = {};
+    portalData.forEach((row, idx) => {
+      const gstin = getVal(row, portalMap.gstin);
+      const inv = getVal(row, portalMap.invoice_no);
+      if (!gstin && !inv) return;
+      const key = normalizeKey(gstin, inv);
+      portalMap2[key] = { row, idx };
+    });
+
+    setProgress(40);
+    const results = [];
+    const usedPortal = new Set();
+
+    // Process books records
+    booksData.forEach(row => {
+      const gstin = getVal(row, booksMap.gstin);
+      const inv = getVal(row, booksMap.invoice_no);
+      const supplier = getVal(row, booksMap.supplier);
+      const date = getVal(row, booksMap.invoice_date);
+
+      const taxableB = getNum(row, booksMap.taxable);
+      const igstB = getNum(row, booksMap.igst);
+      const cgstB = getNum(row, booksMap.cgst);
+      const sgstB = getNum(row, booksMap.sgst);
+      const cessB = getNum(row, booksMap.cess);
+      const totalTaxB = igstB + cgstB + sgstB + cessB;
+
+      const key = normalizeKey(gstin, inv);
+      const portalMatch = portalMap2[key];
+
+      if (portalMatch) {
+        usedPortal.add(key);
+        const pr = portalMatch.row;
+        const taxableP = getNum(pr, portalMap.taxable);
+        const igstP = getNum(pr, portalMap.igst);
+        const cgstP = getNum(pr, portalMap.cgst);
+        const sgstP = getNum(pr, portalMap.sgst);
+        const cessP = getNum(pr, portalMap.cess);
+        const totalTaxP = igstP + cgstP + sgstP + cessP;
+        const diff = totalTaxB - totalTaxP;
+        const absDiff = Math.abs(diff);
+
+        let status, reason;
+        if (absDiff === 0) {
+          status = 'matched';
+          reason = 'Fully reconciled';
+        } else if (absDiff <= tolerance) {
+          status = 'minor';
+          reason = `Minor rounding difference of ₹${formatINR(diff)}`;
+        } else {
+          status = 'mismatch';
+          const taxDiff = absDiff;
+          const taxableDiff = Math.abs(taxableB - taxableP);
+          if (taxableDiff > tolerance && taxDiff > tolerance)
+            reason = `Taxable value differs by ₹${formatINR(taxableB-taxableP)} & tax differs by ₹${formatINR(diff)}`;
+          else if (taxableDiff > tolerance)
+            reason = `Taxable value differs by ₹${formatINR(taxableB-taxableP)}`;
+          else
+            reason = `Tax amount differs by ₹${formatINR(diff)} (IGST/CGST/SGST split mismatch)`;
+        }
+
+        results.push({ status, gstin, supplier, invoice_no: inv, invoice_date: date,
+          taxable_books: taxableB, taxable_portal: taxableP,
+          igst_books: igstB, cgst_books: cgstB, sgst_books: sgstB, cess_books: cessB,
+          igst_portal: igstP, cgst_portal: cgstP, sgst_portal: sgstP, cess_portal: cessP,
+          tax_books: totalTaxB, tax_portal: totalTaxP, diff, reason });
+      } else {
+        results.push({ status: 'books_only', gstin, supplier, invoice_no: inv, invoice_date: date,
+          taxable_books: taxableB, taxable_portal: null,
+          igst_books: igstB, cgst_books: cgstB, sgst_books: sgstB, cess_books: cessB,
+          igst_portal: 0, cgst_portal: 0, sgst_portal: 0, cess_portal: 0,
+          tax_books: totalTaxB, tax_portal: null, diff: totalTaxB,
+          reason: 'Invoice in Books but NOT found in GSTR-2B Portal' });
+      }
+    });
+
+    setProgress(80);
+
+    // Portal records not in books
+    Object.entries(portalMap2).forEach(([key, { row }]) => {
+      if (usedPortal.has(key)) return;
+      const gstin = getVal(row, portalMap.gstin);
+      const inv = getVal(row, portalMap.invoice_no);
+      const supplier = getVal(row, portalMap.supplier);
+      const date = getVal(row, portalMap.invoice_date);
+      const taxableP = getNum(row, portalMap.taxable);
+      const igstP = getNum(row, portalMap.igst);
+      const cgstP = getNum(row, portalMap.cgst);
+      const sgstP = getNum(row, portalMap.sgst);
+      const cessP = getNum(row, portalMap.cess);
+      const totalTaxP = igstP + cgstP + sgstP + cessP;
+
+      results.push({ status: 'portal_only', gstin, supplier, invoice_no: inv, invoice_date: date,
+        taxable_books: null, taxable_portal: taxableP,
+        igst_books: 0, cgst_books: 0, sgst_books: 0, cess_books: 0,
+        igst_portal: igstP, cgst_portal: cgstP, sgst_portal: sgstP, cess_portal: cessP,
+        tax_books: null, tax_portal: totalTaxP, diff: -totalTaxP,
+        reason: 'Invoice on GSTR-2B Portal but NOT in Books of Accounts' });
+    });
+
+    setProgress(100);
+    reconResults = results;
+    filteredResults = results;
+
+    renderSummary(results, tolerance);
+    renderITC(results);
+    applyFilters();
+
+    document.getElementById('summaryRow').style.display = 'grid';
+    document.getElementById('itcSection').style.display = 'block';
+    document.getElementById('resultsSection').style.display = 'block';
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('exportBtn').style.display = '';
+
+    setTimeout(hideProgress, 300);
+  }, 50);
+}
+
+function renderSummary(results, tolerance) {
+  const matched = results.filter(r => r.status === 'matched');
+  const mismatch = results.filter(r => r.status === 'mismatch');
+  const booksOnly = results.filter(r => r.status === 'books_only');
+  const portalOnly = results.filter(r => r.status === 'portal_only');
+  const minor = results.filter(r => r.status === 'minor');
+
+  const sum = arr => arr.reduce((a, r) => a + (r.tax_books || r.tax_portal || 0), 0);
+  const absDiff = arr => arr.reduce((a, r) => a + Math.abs(r.diff || 0), 0);
+
+  document.getElementById('tileMatched').textContent = matched.length;
+  document.getElementById('tileMatchedAmt').textContent = '₹' + formatINR(sum(matched));
+  document.getElementById('tileMismatch').textContent = mismatch.length;
+  document.getElementById('tileMismatchAmt').textContent = 'Diff ₹' + formatINR(absDiff(mismatch));
+  document.getElementById('tileBooksOnly').textContent = booksOnly.length;
+  document.getElementById('tileBooksOnlyAmt').textContent = '₹' + formatINR(sum(booksOnly));
+  document.getElementById('tilePortalOnly').textContent = portalOnly.length;
+  document.getElementById('tilePortalOnlyAmt').textContent = '₹' + formatINR(sum(portalOnly));
+  document.getElementById('tileMinor').textContent = minor.length;
+  document.getElementById('tileMinorAmt').textContent = 'Diff ₹' + formatINR(absDiff(minor));
+}
+
+// ── ITC SUMMARY ────────────────────────────────────────────────────
+function renderITC(results) {
+  const s = (arr, field) => arr.reduce((a, r) => a + (r[field] || 0), 0);
+
+  const matched   = results.filter(r => r.status === 'matched' || r.status === 'minor');
+  const booksOnly = results.filter(r => r.status === 'books_only');
+  const portalOnly= results.filter(r => r.status === 'portal_only');
+  const mismatch  = results.filter(r => r.status === 'mismatch');
+  const all       = results;
+
+  // For "matched" bucket — show books figure (same as portal for matched/minor)
+  const taxes = [
+    { key: 'igst', label: 'IGST', dot: 'dot-igst' },
+    { key: 'cgst', label: 'CGST', dot: 'dot-cgst' },
+    { key: 'sgst', label: 'SGST / UTGST', dot: 'dot-sgst' },
+    { key: 'cess', label: 'Cess', dot: 'dot-cess' },
+  ];
+
+  const fmtCell = (n, cls) => {
+    if (n === 0) return `<span class="itc-col-diff-zero">—</span>`;
+    return `<span class="${cls}">${formatINR(n)}</span>`;
+  };
+  const fmtDiff = (n) => {
+    if (Math.abs(n) < 0.01) return `<span class="itc-col-diff-zero">—</span>`;
+    const cls = n > 0 ? 'itc-col-diff-pos' : 'itc-col-diff-neg';
+    return `<span class="${cls}">${n > 0 ? '+' : ''}${formatINR(n)}</span>`;
+  };
+
+  let rows = '';
+
+  taxes.forEach(t => {
+    const bk = s(all, `${t.key}_books`);
+    const po = s(all, `${t.key}_portal`);
+    const diff = bk - po;
+    const matchedAmt = s(matched, `${t.key}_books`);
+    const booksOnlyAmt = s(booksOnly, `${t.key}_books`);
+    const portalOnlyAmt = s(portalOnly, `${t.key}_portal`);
+
+    rows += `<tr>
+      <td class="col-label"><span class="tax-dot ${t.dot}"></span>${t.label}</td>
+      <td class="itc-col-books">${formatINR(bk)}</td>
+      <td class="itc-col-portal">${formatINR(po)}</td>
+      <td>${fmtDiff(diff)}</td>
+      <td>${fmtCell(matchedAmt, 'itc-col-portal')}</td>
+      <td>${fmtCell(booksOnlyAmt, 'itc-col-books')}</td>
+      <td>${fmtCell(portalOnlyAmt, 'itc-col-diff-pos')}</td>
+    </tr>`;
+  });
+
+  // Totals row
+  const totBk = s(all, 'igst_books') + s(all, 'cgst_books') + s(all, 'sgst_books') + s(all, 'cess_books');
+  const totPo = s(all, 'igst_portal') + s(all, 'cgst_portal') + s(all, 'sgst_portal') + s(all, 'cess_portal');
+  const totDiff = totBk - totPo;
+  const totMatched = s(matched, 'igst_books') + s(matched, 'cgst_books') + s(matched, 'sgst_books') + s(matched, 'cess_books');
+  const totBooksOnly = s(booksOnly, 'igst_books') + s(booksOnly, 'cgst_books') + s(booksOnly, 'sgst_books') + s(booksOnly, 'cess_books');
+  const totPortalOnly = s(portalOnly, 'igst_portal') + s(portalOnly, 'cgst_portal') + s(portalOnly, 'sgst_portal') + s(portalOnly, 'cess_portal');
+
+  rows += `<tr class="total-row">
+    <td class="col-label"><span class="tax-dot dot-total"></span>Total ITC</td>
+    <td class="itc-col-books">${formatINR(totBk)}</td>
+    <td class="itc-col-portal">${formatINR(totPo)}</td>
+    <td>${fmtDiff(totDiff)}</td>
+    <td class="itc-col-portal">${formatINR(totMatched)}</td>
+    <td class="itc-col-books">${formatINR(totBooksOnly)}</td>
+    <td class="itc-col-diff-pos">${formatINR(totPortalOnly)}</td>
+  </tr>`;
+
+  document.getElementById('itcTableBody').innerHTML = rows;
+}
+
+
+function setFilter(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentPage = 1;
+  applyFilters();
+}
+
+function applyFilters() {
+  const search = document.getElementById('searchInput').value.toLowerCase();
+  filteredResults = reconResults.filter(r => {
+    if (currentFilter !== 'all' && r.status !== currentFilter) return false;
+    if (search) {
+      const haystack = [r.gstin, r.supplier, r.invoice_no, r.reason].join(' ').toLowerCase();
+      if (!haystack.includes(search)) return false;
+    }
+    return true;
+  });
+  if (sortCol) doSort();
+  renderTable();
+}
+
+function sortTable(col) {
+  if (sortCol === col) sortDir *= -1;
+  else { sortCol = col; sortDir = 1; }
+  document.querySelectorAll('th').forEach(th => th.classList.remove('sort-asc','sort-desc'));
+  event.target.classList.add(sortDir === 1 ? 'sort-asc' : 'sort-desc');
+  doSort();
+  renderTable();
+}
+
+function doSort() {
+  filteredResults.sort((a, b) => {
+    let av = a[sortCol], bv = b[sortCol];
+    if (av === null) av = sortDir > 0 ? Infinity : -Infinity;
+    if (bv === null) bv = sortDir > 0 ? Infinity : -Infinity;
+    if (typeof av === 'number') return (av - bv) * sortDir;
+    return av.toString().localeCompare(bv.toString()) * sortDir;
+  });
+}
+
+function renderTable() {
+  const tbody = document.getElementById('tableBody');
+  const total = filteredResults.length;
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const pageData = filteredResults.slice(start, start + PAGE_SIZE);
+
+  document.getElementById('rowCount').textContent = `${total} records`;
+
+  const statusBadge = {
+    matched: '<span class="badge badge-matched">✅ Matched</span>',
+    mismatch: '<span class="badge badge-mismatch">⚠ Mismatch</span>',
+    books_only: '<span class="badge badge-books">📒 Books Only</span>',
+    portal_only: '<span class="badge badge-portal">🏛 Portal Only</span>',
+    minor: '<span class="badge badge-minor">≈ Minor</span>'
+  };
+
+  const fmtNum = (v) => v === null ? '<span style="color:var(--muted)">—</span>' : formatINR(v);
+
+  tbody.innerHTML = pageData.map(r => {
+    const diffClass = r.diff === 0 ? 'diff-cell zero' : 'diff-cell';
+    return `<tr>
+      <td>${statusBadge[r.status] || r.status}</td>
+      <td>${r.gstin || '—'}</td>
+      <td>${r.supplier || '—'}</td>
+      <td>${r.invoice_no || '—'}</td>
+      <td>${r.invoice_date || '—'}</td>
+      <td class="num">${fmtNum(r.taxable_books)}</td>
+      <td class="num">${fmtNum(r.taxable_portal)}</td>
+      <td class="num">${fmtNum(r.tax_books)}</td>
+      <td class="num">${fmtNum(r.tax_portal)}</td>
+      <td class="num ${diffClass}">${r.diff !== undefined ? (r.diff >= 0 ? '' : '') + formatINR(r.diff) : '—'}</td>
+      <td style="font-size:0.72rem;color:var(--muted)">${r.reason}</td>
+    </tr>`;
+  }).join('');
+
+  renderPagination(total);
+}
+
+function renderPagination(total) {
+  const pages = Math.ceil(total / PAGE_SIZE);
+  const pag = document.getElementById('pagination');
+  if (pages <= 1) { pag.innerHTML = ''; return; }
+
+  let html = `<button class="page-btn" onclick="goPage(${currentPage-1})" ${currentPage===1?'disabled':''}>◀</button>`;
+  for (let p = Math.max(1, currentPage-2); p <= Math.min(pages, currentPage+2); p++) {
+    html += `<button class="page-btn ${p===currentPage?'active':''}" onclick="goPage(${p})">${p}</button>`;
+  }
+  html += `<button class="page-btn" onclick="goPage(${currentPage+1})" ${currentPage===pages?'disabled':''}>▶</button>`;
+  html += `<span style="color:var(--muted);font-size:0.7rem">Page ${currentPage} of ${pages}</span>`;
+  pag.innerHTML = html;
+}
+
+function goPage(p) { currentPage = p; renderTable(); }
+
+// ── EXPORT ─────────────────────────────────────────────────────────
+function exportCSV() {
+  const headers = ['Status','GSTIN','Supplier','Invoice No','Invoice Date','Taxable(Books)','Taxable(Portal)','Tax(Books)','Tax(Portal)','Tax Diff','Reason'];
+  const rows = filteredResults.map(r => [
+    r.status, r.gstin, r.supplier, r.invoice_no, r.invoice_date,
+    r.taxable_books ?? '', r.taxable_portal ?? '',
+    r.tax_books ?? '', r.tax_portal ?? '', r.diff ?? '', r.reason
+  ]);
+  const csv = [headers, ...rows].map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'GST_2B_Reconciliation.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── PROGRESS ────────────────────────────────────────────────────────
+function showProgress(title, msg, pct) {
+  document.getElementById('progressTitle').textContent = title;
+  document.getElementById('progressMsg').textContent = msg;
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressOverlay').classList.add('show');
+}
+function setProgress(pct) { document.getElementById('progressFill').style.width = pct + '%'; }
+function hideProgress() { document.getElementById('progressOverlay').classList.remove('show'); }
+</script>
+<footer style="
+  background: var(--ink);
+  color: var(--muted);
+  text-align: center;
+  padding: 1.2rem 2rem;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  border-top: 3px solid var(--accent);
+  margin-top: 2rem;
+">
+  <span style="color:var(--paper); font-family:'Syne',sans-serif; font-weight:700; font-size:0.78rem; letter-spacing:0.04em;">
+    GST Purchase Reconciliation
+  </span>
+  <span style="margin: 0 1rem; opacity:0.3;">|</span>
+  Crafted by <span style="color:var(--paper); font-weight:500;">Rakesh KS</span>
+  <span style="margin: 0 1rem; opacity:0.3;">·</span>
+  AY 2025–26
+</footer>
+
+</body>
+</html>
